@@ -59,12 +59,10 @@ object Main extends TaskApp {
       .use { client =>
         for {
           resBody <- client.expect[Map[CurrencyPair, Rate]](uri"https://fx.priceonomics.com/v1/rates/")
-          _ <- Task.now(println(resBody.show))
+          _ <- Task(println(resBody.show))
           graph <- convertResponseToGraph(resBody)
           arbitrages <- findArbitrage(graph)
-          _ <- printReport(arbitrages)
-          exitCode <- Task.unit
-            .as(ExitCode.Success)
+          exitCode <- printReport(arbitrages).as(ExitCode.Success)
         } yield exitCode
       }.onErrorHandleWith { t =>
       Task(println(s"Fatal failure: ${t.getMessage}")) *> Task.pure(ExitCode.Error)
@@ -191,7 +189,7 @@ object Main extends TaskApp {
       predecessor <- vertexDistance.predecessor
     } yield {
       predecessor match {
-        case currency if !arbitrageSequence.contains(currency) && currency != source  => true
+        case currency if !arbitrageSequence.contains(currency) && currency != source => true
         case _ => false
       }
     }).getOrElse(false)

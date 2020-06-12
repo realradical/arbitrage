@@ -97,7 +97,7 @@ object Main extends TaskApp {
         case (acc, _) => relaxEdges(acc, allEdges)
       }
 
-      lastRelaxEdges(relaxedDistanceMap, allEdges)
+      detectArbitrageSequence(relaxedDistanceMap, allEdges)
     }
 
   private def relaxEdges(distanceMap: VertexDistanceMap, edges: Seq[Edge]): VertexDistanceMap =
@@ -122,7 +122,7 @@ object Main extends TaskApp {
         }).getOrElse(acc)
     }
 
-  private def lastRelaxEdges(distanceMap: VertexDistanceMap, edges: Seq[Edge]): Arbitrages = {
+  private def detectArbitrageSequence(distanceMap: VertexDistanceMap, edges: Seq[Edge]): Arbitrages = {
     edges.foldLeft(List.empty[List[Currency]]) {
       case (acc, edge) =>
         val from = edge.from

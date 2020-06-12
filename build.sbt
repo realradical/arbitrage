@@ -1,6 +1,7 @@
 val Http4sVersion = "0.21.1"
 val CirceVersion = "0.13.0"
 val MonixVersion = "3.1.0"
+val LogbackVersion = "1.2.3"
 
 lazy val root = (project in file("."))
   .settings(
@@ -14,6 +15,7 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-generic" % CirceVersion,
       "io.circe" %% "circe-generic-extras" % CirceVersion,
       "io.monix" %% "monix" % MonixVersion,
+      "ch.qos.logback" % "logback-classic" % LogbackVersion,
     ),
   )
 

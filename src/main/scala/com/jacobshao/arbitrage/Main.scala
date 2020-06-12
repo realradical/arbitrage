@@ -45,7 +45,7 @@ object Main extends TaskApp {
           _ <- Task.now(println(resBody.show))
           graph <- convertResponseToGraph(resBody)
           arbitrages <- findArbitrage(graph)
-          _ <- Task.now(if (arbitrages.isEmpty) println("No Arbitrage Opportunity."))
+          _ <- printReport(arbitrages)
           exitCode <- Task.unit
             .as(ExitCode.Success)
         } yield exitCode
@@ -79,7 +79,9 @@ object Main extends TaskApp {
 
   type VertexDistanceMap = Map[Currency, VertexDistance]
 
-  type Arbitrages = Seq[List[Currency]]
+  case class Arbitrage(sequence: List[Currency], finalAmount: Double)
+
+  type Arbitrages = Seq[Arbitrage]
 
   private def findArbitrage(graph: Graph): Task[Arbitrages] =
     Task {
@@ -122,7 +124,7 @@ object Main extends TaskApp {
     }
 
   private def detectArbitrageSequence(distanceMap: VertexDistanceMap, edges: Seq[Edge]): Arbitrages = {
-    edges.foldLeft(List.empty[List[Currency]]) {
+    edges.foldLeft(List.empty[Arbitrage]) {
       case (acc, edge) =>
         val from = edge.from
         val to = edge.to
@@ -158,13 +160,7 @@ object Main extends TaskApp {
                   amount * pow(E, -edgeBetween.negativeLogRate.value)
                 }).getOrElse(amount)
             }
-
-            if (finalAmount > 100d) {
-              println("Arbitrage Opportunity:")
-              println(arbitrageSequence.mkString(" -> "))
-              println(f"Start with 100 ${arbitrageSequence.head.value}, end up with $finalAmount%.7f ${arbitrageSequence.head.value} \n")
-            }
-            acc :+ arbitrageSequence
+            if (finalAmount > 100d) acc :+ Arbitrage(arbitrageSequence, finalAmount) else acc
           } else {
             acc
           }
@@ -178,11 +174,22 @@ object Main extends TaskApp {
       predecessor <- vertexDistance.predecessor
     } yield {
       predecessor match {
-        case currency if currency == source => false
-        case currency if !arbitrageSequence.contains(currency) => true
+        case currency if !arbitrageSequence.contains(currency) && currency != source => true
         case _ => false
       }
     }).getOrElse(false)
+
+  private def printReport(arbitrages: Arbitrages): Task[Unit] =
+    Task {
+      println("Printing report =========================>")
+      if (arbitrages.isEmpty) println("No Arbitrage Opportunity.")
+
+      arbitrages.foreach { arbitrage =>
+        println("Arbitrage Opportunity:")
+        println(arbitrage.sequence.mkString(" -> "))
+        println(f"Start with 100 ${arbitrage.sequence.head.value}, end up with ${arbitrage.finalAmount}%.7f ${arbitrage.sequence.head.value} \n")
+      }
+    }
 }
 
 

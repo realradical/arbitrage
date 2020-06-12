@@ -11,7 +11,7 @@ import org.http4s.circe._
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.implicits._
 
-import scala.math.log
+import scala.math.{E, log, pow}
 
 case class CurrencyPair(value: String) extends AnyVal
 
@@ -44,7 +44,8 @@ object Main extends TaskApp {
           resBody <- client.expect[Map[CurrencyPair, Rate]](uri"https://fx.priceonomics.com/v1/rates/")
           _ <- Task.now(println(resBody.show))
           graph <- convertResponseToGraph(resBody)
-          _ <- findArbitrage(graph)
+          arbitrages <- findArbitrage(graph)
+          _ <- Task.now(if (arbitrages.isEmpty) println("No Arbitrage Opportunity."))
           exitCode <- Task.unit
             .as(ExitCode.Success)
         } yield exitCode
@@ -78,7 +79,9 @@ object Main extends TaskApp {
 
   type VertexDistanceMap = Map[Currency, VertexDistance]
 
-  private def findArbitrage(graph: Graph): Task[Unit] =
+  type Arbitrages = Seq[List[Currency]]
+
+  private def findArbitrage(graph: Graph): Task[Arbitrages] =
     Task {
       val distanceMap: VertexDistanceMap = graph.vertices.map {
         case (currency, _) =>
@@ -118,8 +121,8 @@ object Main extends TaskApp {
         }).getOrElse(acc)
     }
 
-  private def lastRelaxEdges(distanceMap: VertexDistanceMap, edges: Seq[Edge]): VertexDistanceMap =
-    edges.foldLeft(distanceMap) {
+  private def lastRelaxEdges(distanceMap: VertexDistanceMap, edges: Seq[Edge]): Arbitrages = {
+    edges.foldLeft(List.empty[List[Currency]]) {
       case (acc, edge) =>
         val from = edge.from
         val to = edge.to
@@ -133,32 +136,53 @@ object Main extends TaskApp {
           val toWeight = toVertexDistance.distance.value
 
           if (newWeight < toWeight) {
-            var arbCycle = List(from, to)
+            var arbitrageSequence = List(from, to)
             var currentVertex = from
-            while (continueFindPredecessor(distanceMap, currentVertex, arbCycle)) {
+            while (continueFindPredecessor(distanceMap, currentVertex, arbitrageSequence)) {
               val predecessor = distanceMap.get(currentVertex).flatMap(_.predecessor).get
-              arbCycle = predecessor +: arbCycle
+              arbitrageSequence = predecessor +: arbitrageSequence
               currentVertex = predecessor
             }
-            val startCurrency = distanceMap.get(currentVertex).flatMap(_.predecessor).get
-            if (startCurrency == source && arbCycle.last != source) arbCycle = arbCycle :+ source
-            arbCycle = startCurrency +: arbCycle
-            println("Arbitrage Opportunity:")
-            println(arbCycle.mkString(" -> "))
-            acc
+            arbitrageSequence = distanceMap.get(currentVertex).flatMap(_.predecessor).fold(arbitrageSequence) { sc =>
+              sc +: arbitrageSequence
+            }
+            if (arbitrageSequence.head == source && arbitrageSequence.last != source) arbitrageSequence = arbitrageSequence :+ source
+
+            val finalAmount = arbitrageSequence.sliding(2).foldLeft(100d) {
+              case (amount, pair) =>
+                (for {
+                  from <- Some(pair.head)
+                  to <- Some(pair.last)
+                  edgeBetween <- edges.find(edge => edge.from == from && edge.to == to)
+                } yield {
+                  amount * pow(E, -edgeBetween.negativeLogRate.value)
+                }).getOrElse(amount)
+            }
+
+            if (finalAmount > 100d) {
+              println("Arbitrage Opportunity:")
+              println(arbitrageSequence.mkString(" -> "))
+              println(f"Start with 100 ${arbitrageSequence.head.value}, end up with $finalAmount%.7f ${arbitrageSequence.head.value} \n")
+            }
+            acc :+ arbitrageSequence
           } else {
             acc
           }
         }).getOrElse(acc)
     }
+  }
 
-  private def continueFindPredecessor(distanceMap: VertexDistanceMap, currentVertex: Currency, arbCycle: Seq[Currency]): Boolean =
-    distanceMap.get(currentVertex).flatMap(pre =>
-      pre.predecessor.map {
+  private def continueFindPredecessor(distanceMap: VertexDistanceMap, currentVertex: Currency, arbitrageSequence: Seq[Currency]): Boolean =
+    (for {
+      vertexDistance <- distanceMap.get(currentVertex)
+      predecessor <- vertexDistance.predecessor
+    } yield {
+      predecessor match {
         case currency if currency == source => false
-        case currency if !arbCycle.contains(currency) => true
+        case currency if !arbitrageSequence.contains(currency) => true
         case _ => false
-      }).getOrElse(false)
+      }
+    }).getOrElse(false)
 }
 
 

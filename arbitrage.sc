@@ -1,3 +1,5 @@
+import $ivy.{`org.http4s::http4s-blaze-client:0.21.1`, `org.http4s::http4s-circe:0.21.1`, `io.circe::circe-generic:0.13.0`, `io.circe::circe-generic-extras:0.13.0`, `io.monix::monix:3.1.0`}
+
 import cats.Show
 import cats.effect.ExitCode
 import cats.implicits._
@@ -10,8 +12,7 @@ import org.http4s.circe._
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.implicits._
 
-import scala.math.{E, log, pow}
-
+import scala.math.{log, E, pow}
 
 case class CurrencyPair(value: String) extends AnyVal
 
